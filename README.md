@@ -12,7 +12,7 @@ Ouvrir `index.html` dans un navigateur. Rien à installer.
 - **Série « Les mots »** (10 niveaux) : le train accroche les wagons-lettres sur lesquels il passe ; il doit les prendre **dans l'ordre** pour écrire le mot de la gare (OS, LIT, BUS, RAT…). Dès le niveau 5, des wagons en trop sont à éviter ; le 7 a deux trains ; le 10 montre seulement l'image (🤖) et la voix dit le mot. La barre au-dessus du plateau se remplit lettre par lettre pendant le trajet.
 - **Bonus « Mon prénom »** : dans « Parents », taper le prénom de l'enfant (15 lettres au plus). Un circuit en serpentin est créé avec un wagon par lettre ; l'enfant pose les rails qui manquent entre les wagons.
 - **Voix** : la consigne est lue à voix haute (🔊 pour la réécouter). Toucher un train ou une gare dit son nom.
-- **Aide** 💡 : pose le rail suivant de la solution.
+- **Aide** 💡 : pose le rail suivant de la solution. Utiliser la lampe limite le score du niveau à 1 étoile (le meilleur score déjà obtenu est gardé).
 - 1 à 3 étoiles selon le nombre d'essais ; réussir un niveau ouvre le suivant. Progression gardée sur l'appareil.
 - **Espace parents** (en bas du menu, protégé par une petite addition) : prénom de l'enfant, ouvrir ou refermer tous les niveaux, remise à zéro des étoiles (prénom gardé) ou de tout, avec confirmation.
 

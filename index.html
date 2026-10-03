@@ -127,6 +127,7 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
   <div class="box">
     <h2 id="wintitle">Bravo !</h2>
     <div id="winstars" class="stars"></div>
+    <p id="winnote" hidden style="margin:-6px 0 14px">💡 Avec la lampe : 1 étoile.<br>Rejoue sans elle pour en gagner&nbsp;3&nbsp;!</p>
     <button id="next" class="go">Niveau suivant ▶</button>
     <div class="row"><button id="again">↻ Rejouer</button><button id="tomenu">Niveaux</button></div>
   </div>
@@ -653,14 +654,14 @@ function drawObstacle(ctx,kind,x,y,s){
 }
 
 /* ---------- game state ---------- */
-let LV=null, series='base', levelIdx=0, grid=null, run=null, fails=0, fx=[], hl=null, drag=null, pending=null, clock=0;
+let LV=null, series='base', levelIdx=0, grid=null, run=null, fails=0, hinted=false, fx=[], hl=null, drag=null, pending=null, clock=0;
 
 function newGrid(){return [...Array(ROWS)].map(()=>Array(COLS).fill(null));}
 
 const levelsOf=sid=>SERIES[sid].levels();
 const isBonus=(sid,i)=>sid==='mots'&&i>=WORD_LEVELS.length;
 function startLevel(sid,i){
-  series=sid;levelIdx=i;LV=parseLevel(levelsOf(sid)[i]);grid=newGrid();run=null;fails=0;fx=[];
+  series=sid;levelIdx=i;LV=parseLevel(levelsOf(sid)[i]);grid=newGrid();run=null;fails=0;hinted=false;fx=[];
   $('lvlnum').textContent=isBonus(sid,i)?'Bonus':(sid==='mots'?'Mots ':'Niveau ')+(i+1);$('lvltheme').textContent=LV.def.theme;
   show('game');updateMission();buildTray();resize();say(LV.def.say);updateGo();
 }
@@ -814,17 +815,19 @@ function confetti(){
   for(let i=0;i<70;i++)fx.push({kind:'confetti',x:Math.random()*COLS,y:-.3-Math.random()*2,vy:Math.random()*1.5,rot:Math.random()*6,t0:clock,life:2.6,color:cs[i%6]});
 }
 function win(){
-  const stars=fails===0?3:fails<=2?2:1, key=SERIES[series].key;
+  // Using the hint lamp caps the score at one star.
+  const stars=hinted?1:fails===0?3:fails<=2?2:1, key=SERIES[series].key;
   save[key][levelIdx]=Math.max(save[key][levelIdx]||0,stars);store();
   sfx.win();
   const last=levelIdx===levelsOf(series).length-1, words=LV.stations.filter(s=>s.word).map(s=>s.word.toLowerCase());
   $('wintitle').textContent=last?'Champion !':'Bravo !';
   $('winstars').innerHTML=[1,2,3].map(k=>`<i class="${k<=stars?'on':''}">★</i>`).join('');
-  $('next').hidden=last;
+  $('next').hidden=last;$('winnote').hidden=!hinted;
   $('win').hidden=false;
-  say(isBonus(series,levelIdx)?`Bravo ! Tu as écrit ton prénom : ${words[0]} !`
+  const msg=isBonus(series,levelIdx)?`Bravo ! Tu as écrit ton prénom : ${words[0]} !`
     :words.length?`Bravo ! Tu as écrit ${words.join(' et ')} !`+(last?' Tu sais écrire avec les trains !':'')
-    :last?'Bravo ! Tu as réussi tous les niveaux. Tu es un vrai chef de gare !':'Bravo ! Tous les trains sont arrivés !');
+    :last?'Bravo ! Tu as réussi tous les niveaux. Tu es un vrai chef de gare !':'Bravo ! Tous les trains sont arrivés !';
+  say(msg+(hinted?' Rejoue sans la lampe pour gagner trois étoiles !':''));
 }
 function updateGo(){$('go').disabled=!!run;$('go').classList.toggle('pulse',!run&&isSolved());}
 // Gentle nudge: the Go button pulses once every train has a valid route.
@@ -896,7 +899,7 @@ function hint(){
   for(const tr of LV.trains){
     for(const sg of trace(LV,LV.solution,tr.idx).segs.slice(1)){
       const want=LV.solution[sg.r][sg.c];
-      if(want&&!LV.fixed[sg.r][sg.c]&&grid[sg.r][sg.c]!==want){grid[sg.r][sg.c]=want;sparkle(sg.c,sg.r);sfx.place();updateGo();return;}
+      if(want&&!LV.fixed[sg.r][sg.c]&&grid[sg.r][sg.c]!==want){hinted=true;grid[sg.r][sg.c]=want;sparkle(sg.c,sg.r);sfx.place();updateGo();return;}
     }
   }
   say('Tout est prêt ! Appuie sur Partez !');
