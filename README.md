@@ -13,6 +13,7 @@ Ouvrir `index.html` dans un navigateur. Rien à installer.
 - **Bonus « Mon prénom »** : dans « Parents », taper le prénom de l'enfant (15 lettres au plus). Un circuit en serpentin est créé avec un wagon par lettre ; l'enfant pose les rails qui manquent entre les wagons.
 - **Voix** : la consigne est lue à voix haute (🔊 pour la réécouter). Toucher un train ou une gare dit son nom.
 - **Aide** 💡 : pose le rail suivant de la solution.
-- 1 à 3 étoiles selon le nombre d'essais ; réussir un niveau ouvre le suivant. Progression gardée sur l'appareil. Lien « Parents » en bas du menu pour tout ouvrir.
+- 1 à 3 étoiles selon le nombre d'essais ; réussir un niveau ouvre le suivant. Progression gardée sur l'appareil.
+- **Espace parents** (en bas du menu, protégé par une petite addition) : prénom de l'enfant, ouvrir ou refermer tous les niveaux, remise à zéro des étoiles (prénom gardé) ou de tout, avec confirmation.
 
 Vérifier que les 10 niveaux ont une solution : `node tests/levels.test.mjs`
