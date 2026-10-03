@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Colori'Trains</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Andika:wght@700&display=swap">
+<style>
+/* Layout: one-screen app for a phone held upright. Menu = list of 10 levels; game = top bar, 5x7 board (canvas), tray of rail pieces to drag, action bar. */
+:root{
+  --sky:#cdeeff; --sky-2:#eaf7ff; --grass:#8fd16a; --grass-2:#7cc257;
+  --ink:#27304a; --ink-soft:#5b6585; --card:#ffffff; --line:#d5deea;
+  --go:#2ec27e; --go-dark:#1f9a61; --sun:#ffbe0b; --tomato:#e63946;
+  --display:"Baloo 2","Comic Sans MS",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:linear-gradient(var(--sky-2),var(--sky));color:var(--ink);font-family:var(--display);overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+[hidden]{display:none!important}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;padding:max(10px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom))}
+
+/* ---------- menu ---------- */
+#menu{overflow-y:auto;gap:14px;align-items:center}
+.hero{display:flex;align-items:center;gap:10px;margin-top:6px}
+.hero h1{margin:0;font-size:clamp(34px,10vw,48px);font-weight:800;line-height:1}
+.hero h1 span{color:var(--tomato)}
+.hero svg{width:78px;flex:none}
+.hello{margin:0;color:var(--ink-soft);font-size:19px;text-align:center}
+.levels{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;width:100%;max-width:460px}
+.lv{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:20px;background:var(--card);box-shadow:0 5px 0 var(--line);text-align:left}
+.lv:active{transform:translateY(3px);box-shadow:0 2px 0 var(--line)}
+.lv .n{flex:none;width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:28px;font-weight:800;color:#fff}
+.lv .t{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.lv .t b{font-size:17px}
+.lv .t span{font-size:18px;letter-spacing:1px;color:var(--sun)}
+.lv[disabled]{opacity:.45;cursor:default}
+.lv[disabled]:active{transform:none;box-shadow:0 5px 0 var(--line)}
+.small{font-size:14px;color:var(--ink-soft);text-decoration:underline;padding:6px;margin-top:auto}
+
+/* ---------- game ---------- */
+#game{gap:8px}
+.top{display:flex;align-items:center;gap:8px}
+.round{flex:none;width:48px;height:48px;border-radius:50%;background:var(--card);box-shadow:0 4px 0 var(--line);display:grid;place-items:center;font-size:24px}
+.round:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
+.round svg{width:26px;height:26px}
+.lvl{flex:1;min-width:0;text-align:center;line-height:1}
+.lvl b{display:block;font-size:24px;font-weight:800}
+.lvl span{font-size:15px;color:var(--ink-soft)}
+#boardwrap{flex:1;min-height:0;display:grid;place-items:center}
+#board{display:block;touch-action:none;border-radius:18px;box-shadow:0 6px 0 var(--grass-2)}
+.tray{display:flex;justify-content:center;gap:6px;padding:6px;border-radius:18px;background:#a0643a;box-shadow:inset 0 -4px 0 #7d4a28;touch-action:none}
+.tray button{position:relative;flex:1 1 0;min-width:0;max-width:60px;aspect-ratio:1;border-radius:12px;background:var(--grass);box-shadow:inset 0 0 0 3px #b8e69c;touch-action:none}
+.tray canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.actions{display:flex;gap:10px;align-items:center}
+.go{flex:1;height:58px;border-radius:20px;background:var(--go);color:#fff;font-size:26px;font-weight:800;box-shadow:0 6px 0 var(--go-dark);display:flex;align-items:center;justify-content:center;gap:10px}
+.go:active{transform:translateY(4px);box-shadow:0 2px 0 var(--go-dark)}
+.go[disabled]{filter:grayscale(.6);opacity:.7}
+.go.pulse{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.05)}}
+#ghost{position:fixed;left:0;top:0;pointer-events:none;z-index:20;filter:drop-shadow(0 6px 6px rgba(0,0,0,.3))}
+
+/* ---------- win ---------- */
+.modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(39,48,74,.45);padding:16px}
+.box{width:100%;max-width:360px;background:var(--card);border-radius:28px;padding:22px 18px;text-align:center;box-shadow:0 10px 0 var(--line);animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+.box h2{margin:0;font-size:44px;font-weight:800;color:var(--go-dark)}
+.box p{margin:4px 0 0;font-size:19px;color:var(--ink-soft)}
+.stars{font-size:52px;letter-spacing:6px;margin:6px 0 14px}
+.stars i{font-style:normal;color:var(--line)}
+.stars i.on{color:var(--sun)}
+.box .go{width:100%;margin-bottom:12px}
+.box .row{display:flex;gap:10px;justify-content:center}
+.box .row button{flex:1;height:50px;border-radius:16px;background:var(--sky-2);box-shadow:0 4px 0 var(--line);font-size:19px;font-weight:600}
+</style>
+</head>
+<body>
+
+<div id="menu" class="screen">
+  <header class="hero">
+    <svg viewBox="0 0 100 70" aria-hidden="true"><rect x="8" y="18" width="62" height="34" rx="8" fill="#e63946"/><rect x="8" y="6" width="26" height="46" rx="6" fill="#b82d38"/><rect x="13" y="12" width="16" height="13" rx="3" fill="#cdeeff"/><rect x="52" y="6" width="10" height="14" rx="3" fill="#27304a"/><path d="M70 30h14l8 22H70z" fill="#ffbe0b"/><circle cx="24" cy="56" r="9" fill="#27304a"/><circle cx="54" cy="56" r="9" fill="#27304a"/><circle cx="24" cy="56" r="3" fill="#fff"/><circle cx="54" cy="56" r="3" fill="#fff"/></svg>
+    <h1>Colori<span>Trains</span></h1>
+  </header>
+  <p class="hello">Emmène chaque train à sa gare !</p>
+  <ol id="levels" class="levels"></ol>
+  <button id="unlock" class="small">Parents : ouvrir tous les niveaux</button>
+</div>
+
+<div id="game" class="screen" hidden>
+  <div class="top">
+    <button id="back" class="round" aria-label="Retour aux niveaux"><svg viewBox="0 0 24 24"><path d="M15 4 7 12l8 8" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="lvl"><b id="lvlnum">Niveau 1</b><span id="lvltheme">Couleurs</span></div>
+    <button id="say" class="round" aria-label="Écouter la consigne">🔊</button>
+  </div>
+  <div id="boardwrap"><canvas id="board" aria-label="Plateau de jeu"></canvas></div>
+  <div id="tray" class="tray" aria-label="Rails à poser"></div>
+  <div class="actions">
+    <button id="hint" class="round" aria-label="Aide">💡</button>
+    <button id="clear" class="round" aria-label="Tout effacer">🧹</button>
+    <button id="go" class="go" aria-label="Faire partir les trains">▶ Partez !</button>
+  </div>
+</div>
+
+<div id="win" class="modal" hidden>
+  <div class="box">
+    <h2 id="wintitle">Bravo !</h2>
+    <div id="winstars" class="stars"></div>
+    <button id="next" class="go">Niveau suivant ▶</button>
+    <div class="row"><button id="again">↻ Rejouer</button><button id="tomenu">Niveaux</button></div>
+  </div>
+</div>
+
+<canvas id="ghost" hidden></canvas>
+
+<script>
+// ===== CORE START =====
+// Pure game rules (no DOM): level data, parsing, train routing. Also loaded by tests/levels.test.mjs.
+const COLS=5, ROWS=7;
+const DIRS={N:[0,-1],E:[1,0],S:[0,1],W:[-1,0]};
+const OPP={N:'S',S:'N',E:'W',W:'E'};
+// Each piece links two sides of its cell; 'x' (crossing) links N-S and E-W.
+const PIECES={h:['E','W'],v:['N','S'],ne:['N','E'],nw:['N','W'],se:['S','E'],sw:['S','W'],x:null};
+const CHAR2PIECE={'-':'h','|':'v','+':'x','L':'ne','J':'nw','r':'se','7':'sw'};
+const ROTATE={h:'v',v:'h',ne:'se',se:'sw',sw:'nw',nw:'ne',x:'x'};
+const CURVES=['h','v','ne','nw','se','sw'];
+
+const col=c=>({color:c,key:c});
+const shp=(v,c)=>({color:c,sym:{t:'shape',v},key:v});
+const txt=(v,c,key)=>({color:c,sym:{t:'text',v},key:key||v});
+const dots=(n,c)=>({color:c,sym:{t:'dots',n},key:String(n)});
+
+// Maps: 5 columns x 7 rows. 1-4 = trains (heading in `dir`), a-d = stations,
+// T tree, R rock, W pond. Rail characters are the reference solution (hidden in play):
+// - horizontal, | vertical, + crossing, L north-east, J north-west, r south-east, 7 south-west.
+const LEVELS=[
+  {theme:'Couleurs', pieces:['h'],
+   say:"Glisse les rails pour emmener le train rouge jusqu'à la gare rouge. Puis appuie sur Partez !",
+   map:['T . . . .',
+        '. . . T .',
+        '. . . . .',
+        '1 - - - a',
+        '. . . . .',
+        '. . . . .',
+        '. . . . T'],
+   trains:[{dir:'E',...col('red')}], stations:[col('red')]},
+  {theme:'Couleurs', pieces:CURVES,
+   say:"Chaque train va à la gare de sa couleur. Touche un rail pour le faire tourner.",
+   map:['. . T . .',
+        '1 - - - 7',
+        '. . . . |',
+        '. . b . |',
+        '. . | . |',
+        '2 - J . a',
+        '. . . T .'],
+   trains:[{dir:'E',...col('red')},{dir:'E',...col('blue')}], stations:[col('red'),col('blue')]},
+  {theme:'Couleurs', pieces:CURVES,
+   say:"Trois trains ! Attention aux arbres et aux rochers.",
+   map:['1 7 T . .',
+        '. L - - a',
+        'T . . . .',
+        '2 - 7 R T',
+        '. . | . .',
+        '. . b . c',
+        '3 - - - J'],
+   trains:[{dir:'E',...col('yellow')},{dir:'E',...col('green')},{dir:'E',...col('blue')}],
+   stations:[col('yellow'),col('green'),col('blue')]},
+  {theme:'Formes', pieces:CURVES,
+   say:"Maintenant, regarde les formes ! Chaque train va à la gare de sa forme.",
+   map:['1 . 2 . 3',
+        '| . | . |',
+        '| . | . |',
+        '| . | . c',
+        'L a | . .',
+        '. T | T .',
+        '. . b . .'],
+   trains:[{dir:'S',...shp('triangle','purple')},{dir:'S',...shp('circle','purple')},{dir:'S',...shp('square','purple')}],
+   stations:[shp('triangle','none'),shp('circle','none'),shp('square','none')]},
+  {theme:'Formes', pieces:CURVES,
+   say:"Attention, piège ! Ne regarde pas la couleur, regarde la forme.",
+   map:['. r a . .',
+        '1 J . . b',
+        '. . . T |',
+        '2 - - - J',
+        '. T . . .',
+        '3 - - - c',
+        '. . T . .'],
+   trains:[{dir:'E',...shp('circle','red')},{dir:'E',...shp('square','blue')},{dir:'E',...shp('triangle','yellow')}],
+   stations:[shp('circle','yellow'),shp('square','red'),shp('triangle','blue')]},
+  {theme:'Formes', pieces:[...CURVES,'x'],
+   say:"Une nouvelle pièce : le croisement ! Avec lui, deux rails peuvent se croiser.",
+   map:['1 - - - a',
+        '2 - 7 r b',
+        '. . | | .',
+        '. r + J .',
+        'T | | . T',
+        '3 J L - c',
+        '4 - - - d'],
+   trains:[{dir:'E',...shp('star','green')},{dir:'E',...shp('circle','red')},{dir:'E',...shp('square','blue')},{dir:'E',...shp('triangle','orange')}],
+   stations:[shp('star','orange'),shp('square','green'),shp('circle','blue'),shp('triangle','red')]},
+  {theme:'Lettres', pieces:[...CURVES,'x'],
+   say:"Les lettres ! Chaque train va à la gare de sa lettre.",
+   map:['1 - 7 T .',
+        '. . a . .',
+        '. . . r b',
+        '2 - - J R',
+        '. T . . c',
+        '. . . . |',
+        '3 - - - J'],
+   trains:[{dir:'E',...txt('C','red')},{dir:'E',...txt('A','blue')},{dir:'E',...txt('B','green')}],
+   stations:[txt('C','none'),txt('A','none'),txt('B','none')]},
+  {theme:'Lettres', pieces:[...CURVES,'x'],
+   say:"Le train du grand A va à la gare du petit a. Trouve la bonne gare pour chaque lettre !",
+   map:['1 . 2 . 3',
+        '| . | . |',
+        '| . L 7 |',
+        '| . R | c',
+        '| . r J .',
+        'L a | . T',
+        '. . b . .'],
+   trains:[{dir:'S',...txt('O','orange')},{dir:'S',...txt('A','purple')},{dir:'S',...txt('E','blue')}],
+   stations:[txt('o','none','O'),txt('a','none','A'),txt('e','none','E')]},
+  {theme:'Chiffres', pieces:[...CURVES,'x'],
+   say:"Les chiffres ! Chaque train va à la gare de son chiffre.",
+   map:['1 2 . 3 .',
+        '| | . | .',
+        '| L - + 7',
+        'a . . | |',
+        '. r - J |',
+        'T | . r J',
+        '. b T c .'],
+   trains:[{dir:'S',...txt('3','green')},{dir:'S',...txt('2','red')},{dir:'S',...txt('1','blue')}],
+   stations:[txt('3','none'),txt('1','none'),txt('2','none')]},
+  {theme:'Chiffres', pieces:[...CURVES,'x'],
+   say:"Dernier défi ! Compte les points sur chaque gare.",
+   map:['. . . . c',
+        'r a b r J',
+        '| . | | .',
+        '| . | | R',
+        '| . | L 7',
+        '| . | . |',
+        '1 . 2 . 3'],
+   trains:[{dir:'N',...txt('3','orange','3')},{dir:'N',...txt('2','purple','2')},{dir:'N',...txt('4','red','4')}],
+   stations:[dots(3,'none'),dots(2,'none'),dots(4,'none')]},
+];
+
+function parseLevel(def){
+  const grid=()=>[...Array(ROWS)].map(()=>Array(COLS).fill(null));
+  const fixed=grid(), solution=grid(), trains=[], stations=[];
+  def.map.forEach((line,r)=>line.split(' ').forEach((ch,c)=>{
+    if(CHAR2PIECE[ch]) solution[r][c]=CHAR2PIECE[ch];
+    else if(ch>='1'&&ch<='6'){const i=+ch-1;trains[i]={...def.trains[i],c,r,idx:i};fixed[r][c]={type:'train',idx:i};}
+    else if(ch>='a'&&ch<='i'){const i=ch.charCodeAt(0)-97;stations[i]={...def.stations[i],c,r,idx:i};fixed[r][c]={type:'station',idx:i};}
+    else if('TRW'.includes(ch)) fixed[r][c]={type:'obstacle',kind:ch};
+  }));
+  return {def,fixed,solution,trains,stations};
+}
+
+function exitSide(piece,entry){
+  if(piece==='x') return OPP[entry];
+  const p=PIECES[piece];
+  return p[0]===entry?p[1]:p[1]===entry?p[0]:null;
+}
+
+// Follows one train over the rails. Returns the cells crossed (for animation) and
+// whether it ends in a station with the same key.
+function trace(lv,grid,ti){
+  const t=lv.trains[ti];
+  let c=t.c, r=t.r, d=t.dir;
+  const segs=[{c,r,from:null,to:d}];
+  for(let step=0;step<COLS*ROWS*2;step++){
+    const nc=c+DIRS[d][0], nr=r+DIRS[d][1], entry=OPP[d];
+    if(nc<0||nr<0||nc>=COLS||nr>=ROWS) return {segs,ok:false};
+    const f=lv.fixed[nr][nc];
+    if(f){
+      if(f.type!=='station') return {segs,ok:false};
+      segs.push({c:nc,r:nr,from:entry,to:null});
+      return {segs,ok:lv.stations[f.idx].key===t.key,station:f.idx};
+    }
+    const p=grid[nr][nc], ex=p&&exitSide(p,entry);
+    if(!ex) return {segs,ok:false};
+    segs.push({c:nc,r:nr,from:entry,to:ex});
+    c=nc; r=nr; d=ex;
+  }
+  return {segs,ok:false};
+}
+// ===== CORE END =====
+
+/* ---------- geometry (cell units) ---------- */
+const sidePt=(c,r,s)=>s==='N'?[c+.5,r]:s==='S'?[c+.5,r+1]:s==='E'?[c+1,r+.5]:[c,r+.5];
+const ANG={E:0,S:Math.PI/2,W:Math.PI,N:-Math.PI/2};
+function cornerOf(c,r,a,b){const s=a+b;return [s.includes('E')?c+1:c, s.includes('S')?r+1:r];}
+function segPoints(s){
+  const ctr=[s.c+.5,s.r+.5], out=[];
+  const line=(p,q,n)=>{for(let i=0;i<=n;i++)out.push([p[0]+(q[0]-p[0])*i/n,p[1]+(q[1]-p[1])*i/n]);};
+  if(!s.from){line(ctr,sidePt(s.c,s.r,s.to),4);return out;}
+  if(!s.to){line(sidePt(s.c,s.r,s.from),ctr,4);return out;}
+  const a=sidePt(s.c,s.r,s.from), b=sidePt(s.c,s.r,s.to);
+  if(OPP[s.from]===s.to){line(a,b,8);return out;}
+  const [cx,cy]=cornerOf(s.c,s.r,s.from,s.to);
+  const a0=Math.atan2(a[1]-cy,a[0]-cx); let da=Math.atan2(b[1]-cy,b[0]-cx)-a0;
+  if(da>Math.PI)da-=2*Math.PI; if(da<-Math.PI)da+=2*Math.PI;
+  for(let i=0;i<=12;i++){const t=a0+da*i/12;out.push([cx+.5*Math.cos(t),cy+.5*Math.sin(t)]);}
+  return out;
+}
+function buildPath(segs){
+  const pts=[];
+  segs.forEach(s=>segPoints(s).forEach((p,i)=>{if(i||!pts.length)pts.push(p);}));
+  const cum=[0];
+  for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+  return {pts,cum,len:cum[cum.length-1]};
+}
+function poseAt(path,s){
+  const {pts,cum}=path; s=Math.max(0,Math.min(s,path.len));
+  let i=1; while(i<cum.length-1&&cum[i]<s)i++;
+  const p=pts[i-1], q=pts[i], k=(s-cum[i-1])/((cum[i]-cum[i-1])||1);
+  return {x:p[0]+(q[0]-p[0])*k, y:p[1]+(q[1]-p[1])*k, a:Math.atan2(q[1]-p[1],q[0]-p[0])};
+}
+
+/* ---------- names & colors ---------- */
+const COLORS={red:['#e63946','rouge'],blue:['#3a86ff','bleue'],yellow:['#ffbe0b','jaune'],green:['#2ec27e','verte'],
+  purple:['#9b5de5','violette'],orange:['#fb8500','orange'],none:['#a1887f','']};
+const MASC={rouge:'rouge',bleue:'bleu',jaune:'jaune',verte:'vert',violette:'violet',orange:'orange'};
+const SHAPE_NAMES={circle:['du rond','rond'],square:['du carré','carré'],triangle:['du triangle','triangle'],star:["de l'étoile",'étoile']};
+const isLetter=v=>/[a-z]/i.test(v);
+function trainName(t){
+  const s=t.sym;
+  if(!s) return 'le train '+MASC[COLORS[t.color][1]];
+  if(s.t==='shape') return 'le train '+SHAPE_NAMES[s.v][1];
+  return isLetter(s.v)?'le train du grand '+s.v:'le train numéro '+s.v;
+}
+function stationName(st){
+  const s=st.sym;
+  if(!s) return 'la gare '+COLORS[st.color][1];
+  if(s.t==='shape') return 'la gare '+SHAPE_NAMES[s.v][0];
+  if(s.t==='dots') return 'Compte les points !';
+  if(isLetter(s.v)) return 'la gare du '+(s.v===s.v.toUpperCase()?'grand ':'petit ')+s.v;
+  return 'la gare du '+s.v;
+}
+
+/* ---------- sound & voice ---------- */
+let actx=null;
+function tone(f,d,{type='sine',vol=.14,at=0,to=null}={}){
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    const t=actx.currentTime+at, o=actx.createOscillator(), g=actx.createGain();
+    o.type=type;o.frequency.setValueAtTime(f,t);if(to)o.frequency.exponentialRampToValueAtTime(to,t+d);
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.001,t+d);
+    o.connect(g).connect(actx.destination);o.start(t);o.stop(t+d+.05);
+  }catch(e){}
+}
+const sfx={
+  pick:()=>tone(440,.07,{type:'triangle'}),
+  place:()=>{tone(520,.08,{type:'triangle'});tone(780,.08,{type:'triangle',at:.05,vol:.08});},
+  rotate:()=>tone(700,.07,{type:'triangle',vol:.1}),
+  remove:()=>tone(320,.15,{type:'triangle',to:160}),
+  whistle:()=>{tone(880,.45,{vol:.09});tone(1108,.45,{vol:.07});},
+  ok:()=>{tone(660,.12);tone(990,.25,{at:.1});},
+  fail:()=>tone(260,.3,{type:'sawtooth',vol:.05,to:150}),
+  win:()=>[523,659,784,1046].forEach((f,i)=>tone(f,.3,{at:i*.12,vol:.12})),
+};
+let frVoice=null;
+function pickVoice(){try{const v=speechSynthesis.getVoices();frVoice=v.find(x=>/^fr[-_]FR/i.test(x.lang))||v.find(x=>/^fr/i.test(x.lang))||null;}catch(e){}}
+try{pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}catch(e){}
+function say(text){
+  try{
+    if(!text||!('speechSynthesis' in window))return;
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);u.lang='fr-FR';if(frVoice)u.voice=frVoice;u.rate=.95;u.pitch=1.1;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ---------- saved progress (this device only) ---------- */
+const KEY='coloritrains-v1';
+let save={stars:Array(LEVELS.length).fill(0),all:false};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.stars))save={...save,...s};}catch(e){}
+function store(){try{localStorage.setItem(KEY,JSON.stringify(save));}catch(e){}}
+const unlocked=i=>save.all||i===0||save.stars[i-1]>0;
+
+/* ---------- drawing ---------- */
+const $=id=>document.getElementById(id);
+const board=$('board'), bctx=board.getContext('2d');
+let S=60; // cell size in CSS px
+const DPR=()=>Math.min(window.devicePixelRatio||1,3);
+
+function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,h,r):ctx.rect(x,y,w,h);}
+
+// Draws the sleepers (layer 0) or rails (layer 1) of one track linking sides a and b.
+function drawTrack(ctx,x,y,s,a,b,layer,half){
+  ctx.save();
+  if(OPP[a]===b||half){
+    ctx.translate(x+s/2,y+s/2);ctx.rotate(half?ANG[a]:(a==='N'||a==='S'?Math.PI/2:0));
+    const x0=half?0:-s/2;
+    if(layer===0){ctx.fillStyle='#8a5a36';for(const k of half?[.12,.37]:[-.37,-.12,.12,.37])rr(ctx,k*s-.05*s,-.31*s,.1*s,.62*s,.03*s),ctx.fill();}
+    else{ctx.strokeStyle='#5d6475';ctx.lineWidth=Math.max(2,.075*s);ctx.lineCap='butt';
+      for(const o of[-.17,.17]){ctx.beginPath();ctx.moveTo(x0,o*s);ctx.lineTo(s/2,o*s);ctx.stroke();}}
+  }else{
+    const [cx,cy]=cornerOf(0,0,a,b), p=sidePt(0,0,a), q=sidePt(0,0,b);
+    const a0=Math.atan2(p[1]-cy,p[0]-cx);let da=Math.atan2(q[1]-cy,q[0]-cx)-a0;
+    if(da>Math.PI)da-=2*Math.PI;if(da<-Math.PI)da+=2*Math.PI;
+    ctx.translate(x+cx*s,y+cy*s);
+    if(layer===0){ctx.fillStyle='#8a5a36';
+      for(const k of[.12,.37,.63,.88]){ctx.save();ctx.rotate(a0+da*k);rr(ctx,.19*s,-.05*s,.62*s,.1*s,.03*s);ctx.fill();ctx.restore();}}
+    else{ctx.strokeStyle='#5d6475';ctx.lineWidth=Math.max(2,.075*s);
+      for(const R of[.33,.67]){ctx.beginPath();ctx.arc(0,0,R*s,a0,a0+da,da<0);ctx.stroke();}}
+  }
+  ctx.restore();
+}
+function tracksOf(p){return p==='x'?[['N','S'],['E','W']]:[PIECES[p]];}
+function drawPiece(ctx,p,x,y,s){
+  for(const layer of[0,1])for(const [a,b] of tracksOf(p))drawTrack(ctx,x,y,s,a,b,layer);
+}
+
+function drawSym(ctx,sym,cx,cy,r,color){
+  ctx.save();ctx.fillStyle=color;ctx.translate(cx,cy);
+  if(sym.t==='shape'){
+    ctx.beginPath();
+    if(sym.v==='circle')ctx.arc(0,0,r*.72,0,7);
+    else if(sym.v==='square')ctx.rect(-r*.62,-r*.62,r*1.24,r*1.24);
+    else if(sym.v==='triangle'){ctx.moveTo(0,-r*.78);ctx.lineTo(r*.8,r*.6);ctx.lineTo(-r*.8,r*.6);ctx.closePath();}
+    else for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,R=i%2?r*.38:r*.85;ctx.lineTo(R*Math.cos(a),R*Math.sin(a));}
+    ctx.fill();
+  }else if(sym.t==='text'){
+    ctx.font=`700 ${r*1.55}px Andika,"Baloo 2",sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(sym.v,0,r*.1);
+  }else{
+    const P={1:[[0,0]],2:[[-1,-1],[1,1]],3:[[-1,-1],[0,0],[1,1]],4:[[-1,-1],[1,-1],[-1,1],[1,1]],
+      5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]}[sym.n];
+    for(const [i,j] of P){ctx.beginPath();ctx.arc(i*r*.48,j*r*.48,r*.2,0,7);ctx.fill();}
+  }
+  ctx.restore();
+}
+
+function drawStation(ctx,st,x,y,s,happy,t){
+  const hex=COLORS[st.color][0], b=happy?Math.abs(Math.sin(t*6))*.06*s*Math.max(0,1-happy):0;
+  ctx.save();ctx.translate(0,-b);
+  ctx.fillStyle='#d9d4c7';rr(ctx,x+.06*s,y+.8*s,.88*s,.14*s,.05*s);ctx.fill();
+  ctx.fillStyle=st.sym?'#fff6e6':shade(hex,.55);ctx.strokeStyle='#27304a';ctx.lineWidth=Math.max(1.5,.03*s);
+  rr(ctx,x+.16*s,y+.42*s,.68*s,.42*s,.04*s);ctx.fill();ctx.stroke();
+  ctx.fillStyle=hex;ctx.beginPath();ctx.moveTo(x+.06*s,y+.46*s);ctx.lineTo(x+.5*s,y+.06*s);ctx.lineTo(x+.94*s,y+.46*s);ctx.closePath();ctx.fill();ctx.stroke();
+  if(st.sym){
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x+.5*s,y+.58*s,.24*s,0,7);ctx.fill();ctx.stroke();
+    drawSym(ctx,st.sym,x+.5*s,y+.58*s,.22*s,'#27304a');
+  }else{
+    ctx.fillStyle='#27304a';rr(ctx,x+.4*s,y+.58*s,.2*s,.26*s,.04*s);ctx.fill();
+  }
+  ctx.restore();
+}
+function shade(hex,k){const n=parseInt(hex.slice(1),16),f=v=>Math.round(v+(255-v)*k);return `rgb(${f(n>>16)},${f(n>>8&255)},${f(n&255)})`;}
+function dark(hex,k){const n=parseInt(hex.slice(1),16),f=v=>Math.round(v*(1-k));return `rgb(${f(n>>16)},${f(n>>8&255)},${f(n&255)})`;}
+
+function drawTrain(ctx,t,px,py,ang,s){
+  const hex=COLORS[t.color][0];
+  ctx.save();ctx.translate(px,py);ctx.rotate(ang);
+  ctx.lineWidth=Math.max(1.5,.03*s);ctx.strokeStyle='#27304a';
+  ctx.fillStyle='#27304a';for(const wx of[-.25,0,.22])for(const wy of[-.25,.25]){rr(ctx,(wx-.07)*s,(wy-.05)*s,.14*s,.1*s,.03*s);ctx.fill();}
+  ctx.fillStyle=hex;rr(ctx,-.36*s,-.22*s,.68*s,.44*s,.1*s);ctx.fill();ctx.stroke();
+  ctx.fillStyle=dark(hex,.25);rr(ctx,-.4*s,-.25*s,.26*s,.5*s,.07*s);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#ffbe0b';ctx.beginPath();ctx.moveTo(.32*s,-.16*s);ctx.lineTo(.44*s,0);ctx.lineTo(.32*s,.16*s);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.restore();
+  if(t.sym){
+    ctx.save();ctx.fillStyle='#fff';ctx.strokeStyle='#27304a';ctx.lineWidth=Math.max(1.5,.03*s);
+    ctx.beginPath();ctx.arc(px,py,.19*s,0,7);ctx.fill();ctx.stroke();ctx.restore();
+    drawSym(ctx,t.sym,px,py,.18*s,'#27304a');
+  }else{
+    ctx.fillStyle='#27304a';ctx.beginPath();ctx.arc(px+Math.cos(ang)*.14*s,py+Math.sin(ang)*.14*s,.08*s,0,7);ctx.fill();
+  }
+}
+
+function drawObstacle(ctx,kind,x,y,s){
+  ctx.save();
+  if(kind==='T'){
+    ctx.fillStyle='#7a4b2a';rr(ctx,x+.44*s,y+.55*s,.12*s,.3*s,.03*s);ctx.fill();
+    ctx.fillStyle='#3e9a3a';for(const [dx,dy,r] of[[.5,.32,.22],[.32,.48,.18],[.68,.48,.18]]){ctx.beginPath();ctx.arc(x+dx*s,y+dy*s,r*s,0,7);ctx.fill();}
+    ctx.fillStyle='#e63946';for(const [dx,dy] of[[.42,.3],[.6,.44],[.34,.5]]){ctx.beginPath();ctx.arc(x+dx*s,y+dy*s,.035*s,0,7);ctx.fill();}
+  }else if(kind==='R'){
+    ctx.fillStyle='#9aa3b5';ctx.beginPath();ctx.ellipse(x+.5*s,y+.6*s,.34*s,.24*s,0,0,7);ctx.fill();
+    ctx.fillStyle='#b9c0ce';ctx.beginPath();ctx.ellipse(x+.42*s,y+.52*s,.18*s,.12*s,0,0,7);ctx.fill();
+  }else{
+    ctx.fillStyle='#4cc3ff';ctx.beginPath();ctx.ellipse(x+.5*s,y+.5*s,.4*s,.3*s,0,0,7);ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---------- game state ---------- */
+let LV=null, levelIdx=0, grid=null, run=null, fails=0, fx=[], hl=null, drag=null, pending=null, clock=0;
+
+function newGrid(){return [...Array(ROWS)].map(()=>Array(COLS).fill(null));}
+
+function startLevel(i){
+  levelIdx=i;LV=parseLevel(LEVELS[i]);grid=newGrid();run=null;fails=0;fx=[];
+  $('lvlnum').textContent='Niveau '+(i+1);$('lvltheme').textContent=LEVELS[i].theme;
+  buildTray();show('game');resize();say(LEVELS[i].say);updateGo();
+}
+
+function buildTray(){
+  const tray=$('tray');tray.innerHTML='';
+  for(const p of LV.def.pieces){
+    const b=document.createElement('button');b.setAttribute('aria-label','Rail');
+    const c=document.createElement('canvas');b.appendChild(c);tray.appendChild(b);
+    b.addEventListener('pointerdown',e=>{if(run)return;e.preventDefault();sfx.pick();beginDrag(p,e,null);});
+  }
+  requestAnimationFrame(()=>tray.querySelectorAll('button').forEach((b,i)=>{
+    const c=b.firstChild, w=b.clientWidth||48, d=DPR();
+    c.width=w*d;c.height=w*d;const x=c.getContext('2d');x.scale(d,d);
+    x.beginPath();x.rect(w*.12,w*.12,w*.76,w*.76);x.clip();drawPiece(x,LV.def.pieces[i],w*.12,w*.12,w*.76);
+  }));
+}
+
+function resize(){
+  if(!LV)return;
+  const w=$('boardwrap');
+  S=Math.floor(Math.min(w.clientWidth/COLS,w.clientHeight/ROWS,110));
+  const d=DPR();
+  board.style.width=S*COLS+'px';board.style.height=S*ROWS+'px';
+  board.width=S*COLS*d;board.height=S*ROWS*d;
+  buildTray();
+}
+window.addEventListener('resize',resize);
+
+function render(){
+  const ctx=bctx, d=DPR(), t=clock;
+  ctx.setTransform(d,0,0,d,0,0);
+  ctx.fillStyle='#8fd16a';ctx.fillRect(0,0,S*COLS,S*ROWS);
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const x=c*S,y=r*S;
+    if(!LV.fixed[r][c]){ctx.fillStyle=(r+c)%2?'#9bd876':'#a3dc80';rr(ctx,x+2,y+2,S-4,S-4,S*.14);ctx.fill();}
+  }
+  if(hl){ctx.fillStyle='rgba(255,255,255,.65)';rr(ctx,hl[0]*S+2,hl[1]*S+2,S-4,S-4,S*.14);ctx.fill();}
+  // rails: sleepers first, then steel, so crossings look right
+  for(const layer of[0,1]){
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(grid[r][c])for(const [a,b] of tracksOf(grid[r][c]))drawTrack(ctx,c*S,r*S,S,a,b,layer);
+    for(const tr of LV.trains)drawTrack(ctx,tr.c*S,tr.r*S,S,tr.dir,OPP[tr.dir],layer,true);
+  }
+  for(const tr of LV.trains){ // buffer stop behind each train
+    const back=sidePt(tr.c,tr.r,OPP[tr.dir]), m=[tr.c+.5,tr.r+.5], bx=(back[0]*.35+m[0]*.65)*S, by=(back[1]*.35+m[1]*.65)*S;
+    ctx.save();ctx.translate(bx,by);ctx.rotate(ANG[tr.dir]);ctx.fillStyle='#e63946';rr(ctx,-.06*S,-.3*S,.12*S,.6*S,.04*S);ctx.fill();ctx.restore();
+  }
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const f=LV.fixed[r][c];if(f&&f.type==='obstacle')drawObstacle(ctx,f.kind,c*S,r*S,S);}
+  LV.stations.forEach((st,i)=>{
+    const h=run&&run.trains.find(a=>a.state==='ok'&&a.res.station===i);
+    drawStation(ctx,st,st.c*S,st.r*S,S,h?Math.min(1,(t-h.tEnd)/1.2)||.001:0,t);
+  });
+  for(const tr of LV.trains){
+    const a=run&&run.trains[tr.idx];
+    let x=tr.c+.5,y=tr.r+.5,ang=ANG[tr.dir];
+    if(a){const p=poseAt(a.path,a.s);x=p.x;y=p.y;ang=p.a;if(a.state==='fail')ang+=Math.sin((t-a.tEnd)*28)*.12*Math.max(0,1-(t-a.tEnd)/.8);}
+    drawTrain(ctx,tr,x*S,y*S,ang,S);
+    if(a&&a.state!=='move')bubble(ctx,x*S,y*S-.5*S,a.state==='ok'?'✓':'?',a.state==='ok'?'#2ec27e':'#e63946');
+  }
+  // smoke, sparkles, confetti
+  fx=fx.filter(p=>t-p.t0<p.life);
+  for(const p of fx){
+    const k=(t-p.t0)/p.life;ctx.globalAlpha=1-k;ctx.fillStyle=p.color;
+    if(p.kind==='confetti'){ctx.save();ctx.translate(p.x*S,(p.y+p.vy*(t-p.t0)+2*(t-p.t0)**2)*S);ctx.rotate(p.rot+(t-p.t0)*5);ctx.fillRect(-.06*S,-.03*S,.12*S,.06*S);ctx.restore();}
+    else{ctx.beginPath();ctx.arc((p.x+(p.vx||0)*k)*S,(p.y-(p.rise||0)*k)*S,p.r*S*(p.kind==='smoke'?1+k:1-k*.5),0,7);ctx.fill();}
+  }
+  ctx.globalAlpha=1;
+}
+function bubble(ctx,x,y,ch,color){
+  const r=S*.2;ctx.save();ctx.fillStyle='#fff';ctx.strokeStyle=color;ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle=color;ctx.font=`800 ${r*1.5}px "Baloo 2",sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(ch,x,y+r*.1);ctx.restore();
+}
+function sparkle(c,r){for(let i=0;i<10;i++){const a=i/10*Math.PI*2;fx.push({kind:'spark',x:c+.5,y:r+.5,vx:Math.cos(a)*.6,rise:-Math.sin(a)*.6,r:.07,t0:clock,life:.6,color:'#ffbe0b'});}}
+
+let last=0;
+function loop(ts){
+  const dt=Math.min(.05,(ts-last)/1000||0);last=ts;clock+=dt;
+  if(LV&&!$('game').hidden){step(dt);render();}
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- running the trains ---------- */
+const SPEED=1.9; // cells per second
+function go(){
+  if(run||!LV)return;
+  sfx.whistle();
+  run={trains:LV.trains.map(tr=>{const res=trace(LV,grid,tr.idx);return {res,path:buildPath(res.segs),s:0,state:'move',tEnd:0};}),done:false};
+  updateGo();
+}
+function step(dt){
+  if(!run)return;
+  for(const a of run.trains){
+    if(a.state!=='move')continue;
+    a.s+=SPEED*dt;
+    const p=poseAt(a.path,a.s);
+    if(Math.random()<dt*7)fx.push({kind:'smoke',x:p.x-Math.cos(p.a)*.1,y:p.y-.25-Math.sin(p.a)*.1,rise:.5,r:.07,t0:clock,life:.9,color:'#ffffff'});
+    if(a.s>=a.path.len){
+      a.state=a.res.ok?'ok':'fail';a.tEnd=clock;
+      a.res.ok?sfx.ok():sfx.fail();
+    }
+  }
+  if(!run.done&&run.trains.every(a=>a.state!=='move')){
+    run.done=true;
+    const won=run.trains.every(a=>a.state==='ok');
+    if(won){setTimeout(win,700);confetti();}
+    else{fails++;say('Oups ! Un train s\'est trompé. Essaie encore !');setTimeout(()=>{run=null;updateGo();},2200);}
+  }
+}
+function confetti(){
+  const cs=['#e63946','#3a86ff','#ffbe0b','#2ec27e','#9b5de5','#fb8500'];
+  for(let i=0;i<70;i++)fx.push({kind:'confetti',x:Math.random()*COLS,y:-.3-Math.random()*2,vy:Math.random()*1.5,rot:Math.random()*6,t0:clock,life:2.6,color:cs[i%6]});
+}
+function win(){
+  const stars=fails===0?3:fails<=2?2:1;
+  save.stars[levelIdx]=Math.max(save.stars[levelIdx],stars);store();
+  sfx.win();
+  const last=levelIdx===LEVELS.length-1;
+  $('wintitle').textContent=last?'Champion !':'Bravo !';
+  $('winstars').innerHTML=[1,2,3].map(k=>`<i class="${k<=stars?'on':''}">★</i>`).join('');
+  $('next').hidden=last;
+  $('win').hidden=false;
+  say(last?'Bravo ! Tu as réussi tous les niveaux. Tu es un vrai chef de gare !':'Bravo ! Tous les trains sont arrivés !');
+}
+function updateGo(){$('go').disabled=!!run;$('go').classList.toggle('pulse',!run&&isSolved());}
+// Gentle nudge: the Go button pulses once every train has a valid route.
+function isSolved(){return LV&&LV.trains.every(t=>trace(LV,grid,t.idx).ok);}
+
+/* ---------- drag & drop ---------- */
+const ghost=$('ghost'), gctx=ghost.getContext('2d');
+function cellAt(x,y){
+  const b=board.getBoundingClientRect(), c=Math.floor((x-b.left)/S), r=Math.floor((y-b.top)/S);
+  return c>=0&&r>=0&&c<COLS&&r<ROWS?[c,r]:null;
+}
+const freeCell=cell=>cell&&!LV.fixed[cell[1]][cell[0]];
+function beginDrag(piece,e,from){
+  const d=DPR();
+  drag={piece,from,id:e.pointerId};
+  ghost.width=S*d;ghost.height=S*d;ghost.style.width=ghost.style.height=S+'px';
+  gctx.setTransform(d,0,0,d,0,0);gctx.clearRect(0,0,S,S);
+  gctx.fillStyle='rgba(255,255,255,.55)';rr(gctx,0,0,S,S,S*.14);gctx.fill();
+  drawPiece(gctx,piece,0,0,S);
+  ghost.hidden=false;moveDrag(e);
+}
+// The piece floats a little above the finger so the child can see where it goes.
+function dragPoint(e){return [e.clientX,e.clientY-(e.pointerType==='mouse'?0:S*.6)];}
+function moveDrag(e){
+  const [x,y]=dragPoint(e);
+  ghost.style.transform=`translate(${x-S/2}px,${y-S/2}px) scale(1.08)`;
+  const cell=cellAt(x,y);hl=freeCell(cell)?cell:null;
+}
+function endDrag(e,cancel){
+  const [x,y]=dragPoint(e), cell=cellAt(x,y);
+  ghost.hidden=true;hl=null;
+  const {piece,from}=drag;drag=null;
+  if(!cancel&&freeCell(cell)){grid[cell[1]][cell[0]]=piece;sfx.place();}
+  else if(from&&cancel)grid[from[1]][from[0]]=piece;
+  else if(from)sfx.remove();
+  updateGo();
+}
+board.addEventListener('pointerdown',e=>{
+  if(run)return;
+  const cell=cellAt(e.clientX,e.clientY);if(!cell)return;
+  const [c,r]=cell, f=LV.fixed[r][c];
+  if(f){
+    if(f.type==='train'){say(trainName(LV.trains[f.idx]));tone(880,.2,{vol:.06});}
+    else if(f.type==='station')say(stationName(LV.stations[f.idx]));
+    return;
+  }
+  if(grid[r][c]){e.preventDefault();pending={c,r,x:e.clientX,y:e.clientY,id:e.pointerId};}
+});
+window.addEventListener('pointermove',e=>{
+  if(pending&&e.pointerId===pending.id&&Math.hypot(e.clientX-pending.x,e.clientY-pending.y)>10){
+    const {c,r}=pending, p=grid[r][c];pending=null;grid[r][c]=null;sfx.pick();beginDrag(p,e,[c,r]);
+  }
+  if(drag&&e.pointerId===drag.id){e.preventDefault();moveDrag(e);}
+},{passive:false});
+window.addEventListener('pointerup',e=>{
+  if(drag&&e.pointerId===drag.id)endDrag(e,false);
+  else if(pending&&e.pointerId===pending.id){ // a tap turns the rail
+    const {c,r}=pending;pending=null;grid[r][c]=ROTATE[grid[r][c]];sfx.rotate();updateGo();
+  }
+});
+window.addEventListener('pointercancel',e=>{if(drag&&e.pointerId===drag.id)endDrag(e,true);pending=null;});
+
+/* ---------- hint ---------- */
+// Lays down the next missing piece of the reference route, following each train from its start.
+function hint(){
+  if(run)return;
+  for(const tr of LV.trains){
+    for(const sg of trace(LV,LV.solution,tr.idx).segs.slice(1)){
+      const want=LV.solution[sg.r][sg.c];
+      if(want&&grid[sg.r][sg.c]!==want){grid[sg.r][sg.c]=want;sparkle(sg.c,sg.r);sfx.place();updateGo();return;}
+    }
+  }
+  say('Tout est prêt ! Appuie sur Partez !');
+}
+
+/* ---------- menu ---------- */
+const THEME_COLOR={Couleurs:'#e63946',Formes:'#9b5de5',Lettres:'#3a86ff',Chiffres:'#fb8500'};
+function buildMenu(){
+  const ol=$('levels');ol.innerHTML='';
+  LEVELS.forEach((L,i)=>{
+    const li=document.createElement('li'), b=document.createElement('button'), open=unlocked(i);
+    b.className='lv';b.disabled=!open;
+    const st=save.stars[i];
+    b.innerHTML=`<span class="n" style="background:${THEME_COLOR[L.theme]}">${open?i+1:'🔒'}</span><span class="t"><b>${L.theme}</b><span>${'★'.repeat(st)}<span style="color:var(--line)">${'★'.repeat(3-st)}</span></span></span>`;
+    b.setAttribute('aria-label',`Niveau ${i+1}, ${L.theme}${open?'':', fermé'}`);
+    b.onclick=()=>startLevel(i);
+    li.appendChild(b);ol.appendChild(li);
+  });
+}
+function show(id){$('menu').hidden=id!=='menu';$('game').hidden=id!=='game';$('win').hidden=true;if(id==='menu'){buildMenu();try{speechSynthesis.cancel();}catch(e){}}}
+
+$('back').onclick=()=>show('menu');
+$('say').onclick=()=>say(LEVELS[levelIdx].say);
+$('go').onclick=go;
+$('hint').onclick=hint;
+$('clear').onclick=()=>{if(run)return;grid=newGrid();sfx.remove();updateGo();};
+$('next').onclick=()=>startLevel(levelIdx+1);
+$('again').onclick=()=>startLevel(levelIdx);
+$('tomenu').onclick=()=>show('menu');
+$('unlock').onclick=()=>{save.all=true;store();buildMenu();};
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>LV&&buildTray());
+show('menu');
+</script>
+</body>
+</html>
