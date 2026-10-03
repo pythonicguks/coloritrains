@@ -31,6 +31,8 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .hero h1 span{color:var(--tomato)}
 .hero svg{width:78px;flex:none}
 .hello{margin:0;color:var(--ink-soft);font-size:19px;text-align:center}
+.series{width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px}
+.series h2{margin:6px 0 0;font-size:22px;font-weight:800}
 .levels{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;width:100%;max-width:460px}
 .lv{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:20px;background:var(--card);box-shadow:0 5px 0 var(--line);text-align:left}
 .lv:active{transform:translateY(3px);box-shadow:0 2px 0 var(--line)}
@@ -51,6 +53,12 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .lvl{flex:1;min-width:0;text-align:center;line-height:1}
 .lvl b{display:block;font-size:24px;font-weight:800}
 .lvl span{font-size:15px;color:var(--ink-soft)}
+.mission{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.word{display:flex;align-items:center;gap:4px;max-width:100%;padding:4px 10px 4px 6px;border-radius:16px;background:var(--card);box-shadow:0 3px 0 var(--line);border-left:8px solid var(--c)}
+.word .pic{font-size:26px;line-height:1;margin-right:2px}
+.word i{flex:0 1 28px;min-width:13px;height:34px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;font:normal 700 22px Andika,var(--display);color:#b9c3d3;background:#f6f9fc}
+.word i.got{background:var(--go);border-color:var(--go-dark);color:#fff}
+.word i.bad{background:var(--tomato);border-color:#b82d38;color:#fff}
 #boardwrap{flex:1;min-height:0;display:grid;place-items:center}
 #board{display:block;touch-action:none;border-radius:18px;box-shadow:0 6px 0 var(--grass-2)}
 .tray{display:flex;justify-content:center;gap:6px;padding:6px;border-radius:18px;background:#a0643a;box-shadow:inset 0 -4px 0 #7d4a28;touch-action:none}
@@ -75,6 +83,9 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .stars i.on{color:var(--sun)}
 .box .go{width:100%;margin-bottom:12px}
 .box .row{display:flex;gap:10px;justify-content:center}
+.box label{display:block;text-align:left;font-weight:700;margin:12px 0 6px}
+.box input{width:100%;font:700 24px Andika,var(--display);padding:10px 12px;border-radius:14px;border:2px solid var(--line);text-transform:uppercase;color:var(--ink)}
+.box .note{font-size:15px;text-align:left}
 .box .row button{flex:1;height:50px;border-radius:16px;background:var(--sky-2);box-shadow:0 4px 0 var(--line);font-size:19px;font-weight:600}
 </style>
 </head>
@@ -86,8 +97,8 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
     <h1>Colori<span>Trains</span></h1>
   </header>
   <p class="hello">Emmène chaque train à sa gare !</p>
-  <ol id="levels" class="levels"></ol>
-  <button id="unlock" class="small">Parents : ouvrir tous les niveaux</button>
+  <div id="series" class="series"></div>
+  <button id="parents" class="small">Parents : prénom et niveaux</button>
 </div>
 
 <div id="game" class="screen" hidden>
@@ -96,6 +107,7 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
     <div class="lvl"><b id="lvlnum">Niveau 1</b><span id="lvltheme">Couleurs</span></div>
     <button id="say" class="round" aria-label="Écouter la consigne">🔊</button>
   </div>
+  <div id="mission" class="mission" aria-live="polite"></div>
   <div id="boardwrap"><canvas id="board" aria-label="Plateau de jeu"></canvas></div>
   <div id="tray" class="tray" aria-label="Rails à poser"></div>
   <div class="actions">
@@ -111,6 +123,17 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
     <div id="winstars" class="stars"></div>
     <button id="next" class="go">Niveau suivant ▶</button>
     <div class="row"><button id="again">↻ Rejouer</button><button id="tomenu">Niveaux</button></div>
+  </div>
+</div>
+
+<div id="parentbox" class="modal" hidden>
+  <div class="box">
+    <h2 style="color:var(--ink);font-size:32px">Parents</h2>
+    <label for="kidname">Prénom de l'enfant</label>
+    <input id="kidname" maxlength="20" autocomplete="off" placeholder="Ex. : LÉO">
+    <p class="note">Ajoute un niveau bonus « Mon prénom » à la fin de la série Mots (lettres seulement, 15 au plus).</p>
+    <button id="savename" class="go" style="margin-top:12px">Enregistrer</button>
+    <div class="row"><button id="unlock">Ouvrir tous les niveaux</button><button id="closeparents">Fermer</button></div>
   </div>
 </div>
 
@@ -247,6 +270,86 @@ const LEVELS=[
    stations:[dots(3,'none'),dots(2,'none'),dots(4,'none')]},
 ];
 
+// Word series: the train hooks the letter wagons it rolls over; the station wants them in order.
+// `wag` overlays the map with wagon letters (on reference-route cells, or extra ones to avoid).
+const mot=(word,pic,color='red',hide=false)=>({color,key:color,word,hide,sym:{t:'pic',v:pic}});
+const WORD_LEVELS=[
+  {theme:'Mots', pieces:['h'],
+   say:"Nouveau jeu ! Le train accroche les wagons quand il passe dessus. Écris le mot os : d'abord le O, puis le S.",
+   map:['. . . . .','. T . . .','. . . . .','1 - - - a','. . . T .','. . . . .','T . . . .'],
+   wag:['. . . . .','. . . . .','. . . . .','. O . S .','. . . . .','. . . . .','. . . . .'],
+   trains:[{dir:'E',...col('red')}], stations:[mot('OS','🦴')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Écris le mot lit. Attention à l'ordre des lettres : L, I, T.",
+   map:['. . . . .','. r - 7 .','. | . | .','1 J T | .','. . . | .','. . . L a','. T . . .'],
+   wag:['. . . . .','. . L . .','. . . . .','. . . I .','. . . . .','. . . T .','. . . . .'],
+   trains:[{dir:'E',...col('blue')}], stations:[mot('LIT','🛏️','blue')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Écris le mot bus.",
+   map:['r - - 7 .','| . . | .','| T . | T','| . . L a','| . T . .','| . . . .','1 . . . .'],
+   wag:['. . U . .','. . . . .','. . . S .','B . . . .','. . . . .','. . . . .','. . . . .'],
+   trains:[{dir:'N',...col('yellow')}], stations:[mot('BUS','🚌','yellow')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Écris le mot rat.",
+   map:['. . 1 . .','r - J . .','| . . . .','| . T . .','L - - 7 .','. . . | .','. . . L a'],
+   wag:['. . . . .','. . . . .','R . . . .','. . . . .','. . A . .','. . . T .','. . . . .'],
+   trains:[{dir:'S',...col('green')}], stations:[mot('RAT','🐀','green')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Attention, il y a des wagons en trop ! Prends seulement les lettres du mot mer.",
+   map:['. . . T .','1 - 7 . .','. . | . .','T . | . .','. . L 7 .','. . . L a','. T . . .'],
+   wag:['. . . . .','. M . A .','. . . . .','. . E . .','. O . R .','. . . . .','. . . . .'],
+   trains:[{dir:'E',...col('blue')}], stations:[mot('MER','🌊','blue')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Encore des wagons en trop. Écris le mot nez.",
+   map:['. T . . .','. . . . .','. r - 7 .','T | . | .','. | . | .','. | T | .','. a . L 1'],
+   wag:['. . . . .','. . . A .','. . E . .','. . . . .','. Z . N .','. . . . .','. . S . .'],
+   trains:[{dir:'W',...col('purple')}], stations:[mot('NEZ','👃','purple')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Deux trains ! Le train rouge écrit sac. Le train bleu écrit mur.",
+   map:['1 - - - 7','. T . . |','. . . . a','T . R . .','. . r - b','. . | . .','2 - J . T'],
+   wag:['. S . A .','. . . . C','. . . . .','. . . . .','. . . R .','. . U . .','. M . . .'],
+   trains:[{dir:'E',...col('red')},{dir:'E',...col('blue')}], stations:[mot('SAC','🎒','red'),mot('MUR','🧱','blue')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Un mot de quatre lettres : moto.",
+   map:['1 . . . .','| . T . .','| . . . .','L - - - 7','. . . . |','a - - - J','. . T . .'],
+   wag:['. . . . .','. . . . .','M . . . .','. . O . .','. . . . T','. . O . .','. . . . .'],
+   trains:[{dir:'S',...col('orange')}], stations:[mot('MOTO','🏍️','orange')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Quatre lettres, et des wagons en trop ! Écris le mot lune.",
+   map:['T . . . 1','. r - - J','. | . . .','. L - 7 .','. . . | .','a - - J .','. . . . .'],
+   wag:['. . . . .','. . L . .','S U . . .','. . . N O','. I . . .','. . E . .','. . . . .'],
+   trains:[{dir:'S',...col('purple')}], stations:[mot('LUNE','🌙','purple')]},
+  {theme:'Mots', pieces:CURVES,
+   say:"Dernier défi ! Le mot n'est pas écrit. Regarde l'image et écoute bien : robot.",
+   map:['1 - - - 7','T . . . |','r - - - J','| . T . .','L - - 7 .','. . . | .','. . . a .'],
+   wag:['. R . O .','. A . . .','. . B . .','. . . . .','. O . . S','. . . T .','. . . . .'],
+   trains:[{dir:'E',...col('red')}], stations:[mot('ROBOT','🤖','red',true)]},
+];
+
+// Bonus level built from the child's first name: a snake route with every letter wagon
+// already on its rail; the child fills the gaps between wagons.
+const NAME_MAX=15;
+function cleanName(raw){return [...String(raw||'').toUpperCase()].filter(ch=>/\p{L}/u.test(ch)).slice(0,NAME_MAX).join('');}
+function nameLevel(name){
+  const letters=[...name], P=2*letters.length+2;
+  const snake=[];for(let r=0;r<ROWS;r++)for(let i=0;i<COLS;i++)snake.push([r%2?COLS-1-i:i,r]);
+  const map=[...Array(ROWS)].map(()=>Array(COLS).fill('.')), wag=map.map(r=>r.slice()), locked=[];
+  const side=(a,b)=>b[0]>a[0]?'E':b[0]<a[0]?'W':b[1]>a[1]?'S':'N';
+  const CH={EW:'-',NS:'|',EN:'L',NW:'J',ES:'r',SW:'7'};
+  map[0][0]='1';
+  for(let i=1;i<P;i++){
+    const [c,r]=snake[i], k=[side(snake[i],snake[i-1]),side(snake[i],snake[i+1])].sort().join('');
+    map[r][c]=CH[k];
+    if(i%2===0){wag[r][c]=letters[i/2-1];locked.push([c,r]);}
+  }
+  map[snake[P][1]][snake[P][0]]='a';
+  for(let i=P+2;i<snake.length;i+=3)map[snake[i][1]][snake[i][0]]='T';
+  return {theme:'Mon prénom', pieces:CURVES,
+    say:`Écris ton prénom : ${name.toLowerCase()} ! Pose les rails qui manquent entre les wagons.`,
+    map:map.map(r=>r.join(' ')), wag:wag.map(r=>r.join(' ')), locked,
+    trains:[{dir:'E',...col('red')}], stations:[mot(name,'⭐')]};
+}
+
 function parseLevel(def){
   const grid=()=>[...Array(ROWS)].map(()=>Array(COLS).fill(null));
   const fixed=grid(), solution=grid(), trains=[], stations=[];
@@ -256,7 +359,10 @@ function parseLevel(def){
     else if(ch>='a'&&ch<='i'){const i=ch.charCodeAt(0)-97;stations[i]={...def.stations[i],c,r,idx:i};fixed[r][c]={type:'station',idx:i};}
     else if('TRW'.includes(ch)) fixed[r][c]={type:'obstacle',kind:ch};
   }));
-  return {def,fixed,solution,trains,stations};
+  const wagons=grid();
+  (def.wag||[]).forEach((line,r)=>line.split(' ').forEach((ch,c)=>{if(ch!=='.')wagons[r][c]=ch;}));
+  for(const [c,r] of def.locked||[])fixed[r][c]={type:'rail',piece:solution[r][c]};
+  return {def,fixed,solution,trains,stations,wagons};
 }
 
 function exitSide(piece,entry){
@@ -265,28 +371,33 @@ function exitSide(piece,entry){
   return p[0]===entry?p[1]:p[1]===entry?p[0]:null;
 }
 
-// Follows one train over the rails. Returns the cells crossed (for animation) and
-// whether it ends in a station with the same key.
-function trace(lv,grid,ti){
-  const t=lv.trains[ti];
+// Follows one train over the rails. Returns the cells crossed (for animation), the wagons
+// hooked on the way, and whether it ends in its own station (with the right word, if any).
+// `taken` holds wagons already hooked by an earlier train.
+function trace(lv,grid,ti,taken=new Set()){
+  const t=lv.trains[ti], letters=[];
   let c=t.c, r=t.r, d=t.dir;
   const segs=[{c,r,from:null,to:d}];
   for(let step=0;step<COLS*ROWS*2;step++){
     const nc=c+DIRS[d][0], nr=r+DIRS[d][1], entry=OPP[d];
-    if(nc<0||nr<0||nc>=COLS||nr>=ROWS) return {segs,ok:false};
+    if(nc<0||nr<0||nc>=COLS||nr>=ROWS) return {segs,ok:false,letters};
     const f=lv.fixed[nr][nc];
-    if(f){
-      if(f.type!=='station') return {segs,ok:false};
+    if(f&&f.type==='station'){
       segs.push({c:nc,r:nr,from:entry,to:null});
-      return {segs,ok:lv.stations[f.idx].key===t.key,station:f.idx};
+      const st=lv.stations[f.idx], spelled=letters.map(x=>x.l).join('');
+      return {segs,ok:st.key===t.key&&(st.word==null||spelled===st.word),station:f.idx,letters};
     }
-    const p=grid[nr][nc], ex=p&&exitSide(p,entry);
-    if(!ex) return {segs,ok:false};
+    if(f&&f.type!=='rail') return {segs,ok:false,letters};
+    const p=f?f.piece:grid[nr][nc], ex=p&&exitSide(p,entry);
+    if(!ex) return {segs,ok:false,letters};
     segs.push({c:nc,r:nr,from:entry,to:ex});
+    const w=lv.wagons&&lv.wagons[nr][nc], wk=nc+','+nr;
+    if(w&&!taken.has(wk)){taken.add(wk);letters.push({l:w,seg:segs.length-1});}
     c=nc; r=nr; d=ex;
   }
-  return {segs,ok:false};
+  return {segs,ok:false,letters};
 }
+function traceAll(lv,grid){const taken=new Set();return lv.trains.map(t=>trace(lv,grid,t.idx,taken));}
 // ===== CORE END =====
 
 /* ---------- geometry (cell units) ---------- */
@@ -307,11 +418,11 @@ function segPoints(s){
   return out;
 }
 function buildPath(segs){
-  const pts=[];
-  segs.forEach(s=>segPoints(s).forEach((p,i)=>{if(i||!pts.length)pts.push(p);}));
+  const pts=[], span=[];
+  segs.forEach(s=>{const a=Math.max(0,pts.length-1);segPoints(s).forEach((p,i)=>{if(i||!pts.length)pts.push(p);});span.push([a,pts.length-1]);});
   const cum=[0];
   for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
-  return {pts,cum,len:cum[cum.length-1]};
+  return {pts,cum,len:cum[cum.length-1],mid:span.map(([a,b])=>(cum[a]+cum[b])/2)};
 }
 function poseAt(path,s){
   const {pts,cum}=path; s=Math.max(0,Math.min(s,path.len));
@@ -334,6 +445,7 @@ function trainName(t){
 }
 function stationName(st){
   const s=st.sym;
+  if(st.word){const w=st.word.toLowerCase();return st.hide?w:[...st.word].join(', ')+' : '+w;}
   if(!s) return 'la gare '+COLORS[st.color][1];
   if(s.t==='shape') return 'la gare '+SHAPE_NAMES[s.v][0];
   if(s.t==='dots') return 'Compte les points !';
@@ -377,10 +489,15 @@ function say(text){
 
 /* ---------- saved progress (this device only) ---------- */
 const KEY='coloritrains-v1';
-let save={stars:Array(LEVELS.length).fill(0),all:false};
-try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.stars))save={...save,...s};}catch(e){}
+let save={stars:Array(LEVELS.length).fill(0),mots:Array(WORD_LEVELS.length+1).fill(0),name:'',all:false};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.stars))save={...save,...s};save.name=cleanName(save.name);}catch(e){}
 function store(){try{localStorage.setItem(KEY,JSON.stringify(save));}catch(e){}}
-const unlocked=i=>save.all||i===0||save.stars[i-1]>0;
+const SERIES={
+  base:{key:'stars',title:'🚉 Les gares',levels:()=>LEVELS},
+  mots:{key:'mots',title:'🔤 Les mots',levels:()=>save.name?[...WORD_LEVELS,nameLevel(save.name)]:WORD_LEVELS},
+};
+// The first-name bonus is always open: it is a treat, not a step.
+const unlocked=(sid,i)=>save.all||i===0||i>=WORD_LEVELS.length||save[SERIES[sid].key][i-1]>0;
 
 /* ---------- drawing ---------- */
 const $=id=>document.getElementById(id);
@@ -428,6 +545,9 @@ function drawSym(ctx,sym,cx,cy,r,color){
   }else if(sym.t==='text'){
     ctx.font=`700 ${r*1.55}px Andika,"Baloo 2",sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText(sym.v,0,r*.1);
+  }else if(sym.t==='pic'){
+    ctx.font=`${r*1.25}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(sym.v,0,r*.08);
   }else{
     const P={1:[[0,0]],2:[[-1,-1],[1,1]],3:[[-1,-1],[0,0],[1,1]],4:[[-1,-1],[1,-1],[-1,1],[1,1]],
       5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]}[sym.n];
@@ -472,6 +592,25 @@ function drawTrain(ctx,t,px,py,ang,s){
   }
 }
 
+function drawWagon(ctx,l,px,py,ang,s){
+  ctx.save();ctx.translate(px,py);ctx.rotate(ang);
+  ctx.lineWidth=Math.max(1.5,.03*s);ctx.strokeStyle='#27304a';
+  ctx.fillStyle='#27304a';for(const wx of[-.17,.17])for(const wy of[-.21,.21]){rr(ctx,(wx-.06)*s,(wy-.045)*s,.12*s,.09*s,.03*s);ctx.fill();}
+  ctx.fillStyle='#f4a259';rr(ctx,-.3*s,-.19*s,.6*s,.38*s,.07*s);ctx.fill();ctx.stroke();
+  ctx.restore();
+  ctx.save();ctx.fillStyle='#fff';ctx.strokeStyle='#27304a';ctx.lineWidth=Math.max(1.5,.025*s);
+  rr(ctx,px-.17*s,py-.17*s,.34*s,.34*s,.06*s);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#27304a';ctx.font=`700 ${.3*s}px Andika,"Baloo 2",sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(l,px,py+.02*s);ctx.restore();
+}
+// A waiting wagon sits along the rail under it (so the rail ends stay visible), or flat on grass.
+function wagonSpot(c,r,p){
+  if(!p||p==='h'||p==='x')return [c+.5,r+.5,0];
+  if(p==='v')return [c+.5,r+.5,Math.PI/2];
+  const [a,b]=PIECES[p], [cx,cy]=cornerOf(c,r,a,b), k=.5/Math.SQRT1_2;
+  return [cx+(c+.5-cx)*k, cy+(r+.5-cy)*k, p==='ne'||p==='sw'?Math.PI/4:-Math.PI/4];
+}
+
 function drawObstacle(ctx,kind,x,y,s){
   ctx.save();
   if(kind==='T'){
@@ -488,14 +627,31 @@ function drawObstacle(ctx,kind,x,y,s){
 }
 
 /* ---------- game state ---------- */
-let LV=null, levelIdx=0, grid=null, run=null, fails=0, fx=[], hl=null, drag=null, pending=null, clock=0;
+let LV=null, series='base', levelIdx=0, grid=null, run=null, fails=0, fx=[], hl=null, drag=null, pending=null, clock=0;
 
 function newGrid(){return [...Array(ROWS)].map(()=>Array(COLS).fill(null));}
 
-function startLevel(i){
-  levelIdx=i;LV=parseLevel(LEVELS[i]);grid=newGrid();run=null;fails=0;fx=[];
-  $('lvlnum').textContent='Niveau '+(i+1);$('lvltheme').textContent=LEVELS[i].theme;
-  buildTray();show('game');resize();say(LEVELS[i].say);updateGo();
+const levelsOf=sid=>SERIES[sid].levels();
+const isBonus=(sid,i)=>sid==='mots'&&i>=WORD_LEVELS.length;
+function startLevel(sid,i){
+  series=sid;levelIdx=i;LV=parseLevel(levelsOf(sid)[i]);grid=newGrid();run=null;fails=0;fx=[];
+  $('lvlnum').textContent=isBonus(sid,i)?'Bonus':(sid==='mots'?'Mots ':'Niveau ')+(i+1);$('lvltheme').textContent=LV.def.theme;
+  show('game');updateMission();buildTray();resize();say(LV.def.say);updateGo();
+}
+
+// Word bar above the board: picture + one box per letter, filled as wagons get hooked.
+function updateMission(){
+  const box=$('mission'), words=LV.stations.filter(st=>st.word);
+  box.hidden=!words.length;
+  box.innerHTML=words.map(st=>{
+    const a=run&&run.trains[LV.trains.findIndex(t=>t.key===st.key)], got=a?a.got:[];
+    const cells=[...st.word].map((ch,k)=>{
+      const g=got[k];
+      return g!=null?`<i class="${g===ch?'got':'bad'}">${g}</i>`:`<i>${st.hide?'':ch}</i>`;
+    }).join('')+got.slice(st.word.length).map(g=>`<i class="bad">${g}</i>`).join('');
+    return `<button class="word" style="--c:${COLORS[st.color][0]}" data-i="${st.idx}" aria-label="${st.hide?'Mot à trouver':st.word}"><span class="pic">${st.sym.v}</span>${cells}</button>`;
+  }).join('');
+  box.querySelectorAll('.word').forEach(b=>b.onclick=()=>say(stationName(LV.stations[+b.dataset.i])));
 }
 
 function buildTray(){
@@ -534,7 +690,7 @@ function render(){
   if(hl){ctx.fillStyle='rgba(255,255,255,.65)';rr(ctx,hl[0]*S+2,hl[1]*S+2,S-4,S-4,S*.14);ctx.fill();}
   // rails: sleepers first, then steel, so crossings look right
   for(const layer of[0,1]){
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(grid[r][c])for(const [a,b] of tracksOf(grid[r][c]))drawTrack(ctx,c*S,r*S,S,a,b,layer);
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const p=pieceAt(c,r);if(p)for(const [a,b] of tracksOf(p))drawTrack(ctx,c*S,r*S,S,a,b,layer);}
     for(const tr of LV.trains)drawTrack(ctx,tr.c*S,tr.r*S,S,tr.dir,OPP[tr.dir],layer,true);
   }
   for(const tr of LV.trains){ // buffer stop behind each train
@@ -542,6 +698,10 @@ function render(){
     ctx.save();ctx.translate(bx,by);ctx.rotate(ANG[tr.dir]);ctx.fillStyle='#e63946';rr(ctx,-.06*S,-.3*S,.12*S,.6*S,.04*S);ctx.fill();ctx.restore();
   }
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const f=LV.fixed[r][c];if(f&&f.type==='obstacle')drawObstacle(ctx,f.kind,c*S,r*S,S);}
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const w=LV.wagons[r][c];
+    if(w&&!(run&&run.hooked.has(c+','+r))){const [x,y,a]=wagonSpot(c,r,pieceAt(c,r));drawWagon(ctx,w,x*S,y*S,a,S);}
+  }
   LV.stations.forEach((st,i)=>{
     const h=run&&run.trains.find(a=>a.state==='ok'&&a.res.station===i);
     drawStation(ctx,st,st.c*S,st.r*S,S,h?Math.min(1,(t-h.tEnd)/1.2)||.001:0,t);
@@ -549,6 +709,7 @@ function render(){
   for(const tr of LV.trains){
     const a=run&&run.trains[tr.idx];
     let x=tr.c+.5,y=tr.r+.5,ang=ANG[tr.dir];
+    if(a)for(const car of a.cars){const p=poseAt(a.path,car.d);drawWagon(ctx,car.l,p.x*S,p.y*S,p.a,S);}
     if(a){const p=poseAt(a.path,a.s);x=p.x;y=p.y;ang=p.a;if(a.state==='fail')ang+=Math.sin((t-a.tEnd)*28)*.12*Math.max(0,1-(t-a.tEnd)/.8);}
     drawTrain(ctx,tr,x*S,y*S,ang,S);
     if(a&&a.state!=='move')bubble(ctx,x*S,y*S-.5*S,a.state==='ok'?'✓':'?',a.state==='ok'?'#2ec27e':'#e63946');
@@ -582,7 +743,10 @@ const SPEED=1.9; // cells per second
 function go(){
   if(run||!LV)return;
   sfx.whistle();
-  run={trains:LV.trains.map(tr=>{const res=trace(LV,grid,tr.idx);return {res,path:buildPath(res.segs),s:0,state:'move',tEnd:0};}),done:false};
+  run={trains:traceAll(LV,grid).map(res=>{
+    const path=buildPath(res.segs);
+    return {res,path,s:0,state:'move',tEnd:0,got:[],cars:[],picks:res.letters.map(x=>({l:x.l,at:path.mid[x.seg],c:res.segs[x.seg].c,r:res.segs[x.seg].r}))};
+  }),hooked:new Set(),done:false};
   updateGo();
 }
 function step(dt){
@@ -590,6 +754,10 @@ function step(dt){
   for(const a of run.trains){
     if(a.state!=='move')continue;
     a.s+=SPEED*dt;
+    while(a.picks.length&&a.picks[0].at<=a.s){ // hook the wagon right behind the engine
+      const k=a.picks.shift();a.got.push(k.l);a.cars.unshift({l:k.l,d:a.s});run.hooked.add(k.c+','+k.r);
+      tone(1250,.08,{type:'square',vol:.05});say(k.l);updateMission();
+    }
     const p=poseAt(a.path,a.s);
     if(Math.random()<dt*7)fx.push({kind:'smoke',x:p.x-Math.cos(p.a)*.1,y:p.y-.25-Math.sin(p.a)*.1,rise:.5,r:.07,t0:clock,life:.9,color:'#ffffff'});
     if(a.s>=a.path.len){
@@ -597,31 +765,45 @@ function step(dt){
       a.res.ok?sfx.ok():sfx.fail();
     }
   }
+  for(const a of run.trains)a.cars.forEach((car,k)=>{car.d+=(a.s-GAP*(k+1)-car.d)*Math.min(1,dt*10);});
   if(!run.done&&run.trains.every(a=>a.state!=='move')){
     run.done=true;
     const won=run.trains.every(a=>a.state==='ok');
-    if(won){setTimeout(win,700);confetti();}
-    else{fails++;say('Oups ! Un train s\'est trompé. Essaie encore !');setTimeout(()=>{run=null;updateGo();},2200);}
+    if(won){setTimeout(win,900);confetti();}
+    else{fails++;const msg=failMessage();say(msg);setTimeout(()=>{run=null;updateGo();updateMission();},msg.length>40?3600:2400);}
   }
+}
+const GAP=.72; // distance between hooked wagons, in cells
+function failMessage(){
+  for(const a of run.trains){
+    const st=a.res.station!=null&&LV.stations[a.res.station], t=LV.trains[run.trains.indexOf(a)];
+    if(a.state==='ok'||!st||!st.word||st.key!==t.key||!a.got.length)continue;
+    if(st.hide)return "Ce n'est pas le bon mot. Écoute bien et essaie encore !";
+    return `Oups ! Le train a écrit ${a.got.join(', ')}. Il fallait ${[...st.word].join(', ')} : ${st.word.toLowerCase()}.`;
+  }
+  return "Oups ! Un train s'est trompé. Essaie encore !";
 }
 function confetti(){
   const cs=['#e63946','#3a86ff','#ffbe0b','#2ec27e','#9b5de5','#fb8500'];
   for(let i=0;i<70;i++)fx.push({kind:'confetti',x:Math.random()*COLS,y:-.3-Math.random()*2,vy:Math.random()*1.5,rot:Math.random()*6,t0:clock,life:2.6,color:cs[i%6]});
 }
 function win(){
-  const stars=fails===0?3:fails<=2?2:1;
-  save.stars[levelIdx]=Math.max(save.stars[levelIdx],stars);store();
+  const stars=fails===0?3:fails<=2?2:1, key=SERIES[series].key;
+  save[key][levelIdx]=Math.max(save[key][levelIdx]||0,stars);store();
   sfx.win();
-  const last=levelIdx===LEVELS.length-1;
+  const last=levelIdx===levelsOf(series).length-1, words=LV.stations.filter(s=>s.word).map(s=>s.word.toLowerCase());
   $('wintitle').textContent=last?'Champion !':'Bravo !';
   $('winstars').innerHTML=[1,2,3].map(k=>`<i class="${k<=stars?'on':''}">★</i>`).join('');
   $('next').hidden=last;
   $('win').hidden=false;
-  say(last?'Bravo ! Tu as réussi tous les niveaux. Tu es un vrai chef de gare !':'Bravo ! Tous les trains sont arrivés !');
+  say(isBonus(series,levelIdx)?`Bravo ! Tu as écrit ton prénom : ${words[0]} !`
+    :words.length?`Bravo ! Tu as écrit ${words.join(' et ')} !`+(last?' Tu sais écrire avec les trains !':'')
+    :last?'Bravo ! Tu as réussi tous les niveaux. Tu es un vrai chef de gare !':'Bravo ! Tous les trains sont arrivés !');
 }
 function updateGo(){$('go').disabled=!!run;$('go').classList.toggle('pulse',!run&&isSolved());}
 // Gentle nudge: the Go button pulses once every train has a valid route.
-function isSolved(){return LV&&LV.trains.every(t=>trace(LV,grid,t.idx).ok);}
+function isSolved(){return LV&&traceAll(LV,grid).every(r=>r.ok);}
+function pieceAt(c,r){const f=LV.fixed[r][c];return f?(f.type==='rail'?f.piece:null):grid[r][c];}
 
 /* ---------- drag & drop ---------- */
 const ghost=$('ghost'), gctx=ghost.getContext('2d');
@@ -665,6 +847,7 @@ board.addEventListener('pointerdown',e=>{
     return;
   }
   if(grid[r][c]){e.preventDefault();pending={c,r,x:e.clientX,y:e.clientY,id:e.pointerId};}
+  else if(LV.wagons[r][c])say(LV.wagons[r][c]);
 });
 window.addEventListener('pointermove',e=>{
   if(pending&&e.pointerId===pending.id&&Math.hypot(e.clientX-pending.x,e.clientY-pending.y)>10){
@@ -687,38 +870,51 @@ function hint(){
   for(const tr of LV.trains){
     for(const sg of trace(LV,LV.solution,tr.idx).segs.slice(1)){
       const want=LV.solution[sg.r][sg.c];
-      if(want&&grid[sg.r][sg.c]!==want){grid[sg.r][sg.c]=want;sparkle(sg.c,sg.r);sfx.place();updateGo();return;}
+      if(want&&!LV.fixed[sg.r][sg.c]&&grid[sg.r][sg.c]!==want){grid[sg.r][sg.c]=want;sparkle(sg.c,sg.r);sfx.place();updateGo();return;}
     }
   }
   say('Tout est prêt ! Appuie sur Partez !');
 }
 
 /* ---------- menu ---------- */
-const THEME_COLOR={Couleurs:'#e63946',Formes:'#9b5de5',Lettres:'#3a86ff',Chiffres:'#fb8500'};
+const THEME_COLOR={Couleurs:'#e63946',Formes:'#9b5de5',Lettres:'#3a86ff',Chiffres:'#fb8500',Mots:'#2ec27e','Mon prénom':'#ffbe0b'};
 function buildMenu(){
-  const ol=$('levels');ol.innerHTML='';
-  LEVELS.forEach((L,i)=>{
-    const li=document.createElement('li'), b=document.createElement('button'), open=unlocked(i);
-    b.className='lv';b.disabled=!open;
-    const st=save.stars[i];
-    b.innerHTML=`<span class="n" style="background:${THEME_COLOR[L.theme]}">${open?i+1:'🔒'}</span><span class="t"><b>${L.theme}</b><span>${'★'.repeat(st)}<span style="color:var(--line)">${'★'.repeat(3-st)}</span></span></span>`;
-    b.setAttribute('aria-label',`Niveau ${i+1}, ${L.theme}${open?'':', fermé'}`);
-    b.onclick=()=>startLevel(i);
-    li.appendChild(b);ol.appendChild(li);
-  });
+  const root=$('series');root.innerHTML='';
+  for(const sid of Object.keys(SERIES)){
+    const h=document.createElement('h2'), ol=document.createElement('ol');
+    h.textContent=SERIES[sid].title;ol.className='levels';root.append(h,ol);
+    levelsOf(sid).forEach((L,i)=>{
+      const li=document.createElement('li'), b=document.createElement('button'), open=unlocked(sid,i);
+      const st=save[SERIES[sid].key][i]||0, bonus=isBonus(sid,i);
+      const label=bonus?save.name:L.stations.map(s=>s.word&&!s.hide?s.word:'').filter(Boolean).join(' · ')||L.theme;
+      b.className='lv';b.disabled=!open;
+      b.innerHTML=`<span class="n" style="background:${THEME_COLOR[L.theme]}">${!open?'🔒':bonus?'⭐':i+1}</span><span class="t"><b></b><span>${'★'.repeat(st)}<span style="color:var(--line)">${'★'.repeat(3-st)}</span></span></span>`;
+      b.querySelector('b').textContent=label;
+      b.setAttribute('aria-label',`${bonus?'Bonus':'Niveau '+(i+1)}, ${label}${open?'':', fermé'}`);
+      b.onclick=()=>startLevel(sid,i);
+      li.appendChild(b);ol.appendChild(li);
+    });
+  }
 }
 function show(id){$('menu').hidden=id!=='menu';$('game').hidden=id!=='game';$('win').hidden=true;if(id==='menu'){buildMenu();try{speechSynthesis.cancel();}catch(e){}}}
 
 $('back').onclick=()=>show('menu');
-$('say').onclick=()=>say(LEVELS[levelIdx].say);
+$('say').onclick=()=>say(LV.def.say);
 $('go').onclick=go;
 $('hint').onclick=hint;
 $('clear').onclick=()=>{if(run)return;grid=newGrid();sfx.remove();updateGo();};
-$('next').onclick=()=>startLevel(levelIdx+1);
-$('again').onclick=()=>startLevel(levelIdx);
+$('next').onclick=()=>startLevel(series,levelIdx+1);
+$('again').onclick=()=>startLevel(series,levelIdx);
 $('tomenu').onclick=()=>show('menu');
-$('unlock').onclick=()=>{save.all=true;store();buildMenu();};
-if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>LV&&buildTray());
+$('unlock').onclick=()=>{save.all=true;store();buildMenu();$('parentbox').hidden=true;};
+$('parents').onclick=()=>{$('kidname').value=save.name;$('parentbox').hidden=false;};
+$('closeparents').onclick=()=>{$('parentbox').hidden=true;};
+$('savename').onclick=()=>{
+  const n=cleanName($('kidname').value);
+  if(n!==save.name)save.mots[WORD_LEVELS.length]=0;
+  save.name=n;store();buildMenu();$('parentbox').hidden=true;
+};
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
 show('menu');
 </script>
 </body>
