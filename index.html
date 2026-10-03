@@ -86,6 +86,12 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .box label{display:block;text-align:left;font-weight:700;margin:12px 0 6px}
 .box input{width:100%;font:700 24px Andika,var(--display);padding:10px 12px;border-radius:14px;border:2px solid var(--line);text-transform:uppercase;color:var(--ink)}
 .box .note{font-size:15px;text-align:left}
+.box .err{color:var(--tomato);font-weight:700;min-height:1.4em}
+.box hr{border:0;border-top:2px dashed var(--line);margin:16px 0 4px}
+.box .row button.danger{background:#fde8ea;color:#b82d38;box-shadow:0 4px 0 #f3c3c8}
+.box .row button.danger.strong{background:var(--tomato);color:#fff;box-shadow:0 4px 0 #b82d38}
+#parentbox{overflow-y:auto}
+#parentbox .box{margin:auto}
 .box .row button{flex:1;height:50px;border-radius:16px;background:var(--sky-2);box-shadow:0 4px 0 var(--line);font-size:19px;font-weight:600}
 </style>
 </head>
@@ -98,7 +104,7 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
   </header>
   <p class="hello">Emmène chaque train à sa gare !</p>
   <div id="series" class="series"></div>
-  <button id="parents" class="small">Parents : prénom et niveaux</button>
+  <button id="parents" class="small">🔒 Espace parents</button>
 </div>
 
 <div id="game" class="screen" hidden>
@@ -129,11 +135,30 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 <div id="parentbox" class="modal" hidden>
   <div class="box">
     <h2 style="color:var(--ink);font-size:32px">Parents</h2>
-    <label for="kidname">Prénom de l'enfant</label>
-    <input id="kidname" maxlength="20" autocomplete="off" placeholder="Ex. : LÉO">
-    <p class="note">Ajoute un niveau bonus « Mon prénom » à la fin de la série Mots (lettres seulement, 15 au plus).</p>
-    <button id="savename" class="go" style="margin-top:12px">Enregistrer</button>
-    <div class="row"><button id="unlock">Ouvrir tous les niveaux</button><button id="closeparents">Fermer</button></div>
+    <form id="gate">
+      <label for="gateanswer">Pour entrer, combien font <span id="gateq"></span>&nbsp;?</label>
+      <input id="gateanswer" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+      <p id="gateerr" class="err"></p>
+      <button class="go" type="submit">Entrer</button>
+    </form>
+    <div id="pcontent" hidden>
+      <label for="kidname">Prénom de l'enfant</label>
+      <input id="kidname" maxlength="20" autocomplete="off" placeholder="Ex. : LÉO">
+      <p class="note">Ajoute un niveau bonus « Mon prénom » à la fin de la série Mots (lettres seulement, 15 au plus).</p>
+      <button id="savename" class="go" style="margin-top:12px">Enregistrer</button>
+      <div class="row"><button id="unlock"></button></div>
+      <hr>
+      <label>Remettre à zéro</label>
+      <div id="resetchoice" class="row">
+        <button id="resetstars" class="danger">Étoiles et niveaux</button>
+        <button id="resetall" class="danger">Tout (prénom compris)</button>
+      </div>
+      <div id="resetconfirm" hidden>
+        <p id="resetmsg" class="note"></p>
+        <div class="row" style="margin-top:8px"><button id="resetyes" class="danger strong">Oui, effacer</button><button id="resetno">Annuler</button></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px"><button id="closeparents">Fermer</button></div>
   </div>
 </div>
 
@@ -489,7 +514,8 @@ function say(text){
 
 /* ---------- saved progress (this device only) ---------- */
 const KEY='coloritrains-v1';
-let save={stars:Array(LEVELS.length).fill(0),mots:Array(WORD_LEVELS.length+1).fill(0),name:'',all:false};
+const freshSave=()=>({stars:Array(LEVELS.length).fill(0),mots:Array(WORD_LEVELS.length+1).fill(0),name:'',all:false});
+let save=freshSave();
 try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.stars))save={...save,...s};save.name=cleanName(save.name);}catch(e){}
 function store(){try{localStorage.setItem(KEY,JSON.stringify(save));}catch(e){}}
 const SERIES={
@@ -906,13 +932,51 @@ $('clear').onclick=()=>{if(run)return;grid=newGrid();sfx.remove();updateGo();};
 $('next').onclick=()=>startLevel(series,levelIdx+1);
 $('again').onclick=()=>startLevel(series,levelIdx);
 $('tomenu').onclick=()=>show('menu');
-$('unlock').onclick=()=>{save.all=true;store();buildMenu();$('parentbox').hidden=true;};
-$('parents').onclick=()=>{$('kidname').value=save.name;$('parentbox').hidden=false;};
-$('closeparents').onclick=()=>{$('parentbox').hidden=true;};
+/* ---------- parents ---------- */
+// A small sum keeps a 5-year-old out; once solved it stays open until the page is reloaded.
+let parentOk=false, gateSum=0, resetKind=null;
+function openParents(){
+  const a=11+Math.floor(Math.random()*9), b=4+Math.floor(Math.random()*6);
+  gateSum=a+b;$('gateq').textContent=`${a} + ${b}`;$('gateanswer').value='';$('gateerr').textContent='';
+  $('gate').hidden=parentOk;$('pcontent').hidden=!parentOk;
+  refreshParents();$('parentbox').hidden=false;
+  if(!parentOk)setTimeout(()=>$('gateanswer').focus(),50);
+}
+function refreshParents(){
+  $('kidname').value=save.name;
+  $('unlock').textContent=save.all?'🔓 Tous ouverts : refermer':'Ouvrir tous les niveaux';
+  $('resetchoice').hidden=false;$('resetconfirm').hidden=true;resetKind=null;
+}
+function closeParents(){$('parentbox').hidden=true;buildMenu();}
+$('parents').onclick=openParents;
+$('closeparents').onclick=closeParents;
+$('gate').onsubmit=e=>{
+  e.preventDefault();
+  if(+$('gateanswer').value===gateSum){parentOk=true;$('gate').hidden=true;$('pcontent').hidden=false;}
+  else{$('gateerr').textContent='Ce n\'est pas ça. Réessaie !';$('gateanswer').value='';}
+};
+$('unlock').onclick=()=>{save.all=!save.all;store();refreshParents();buildMenu();};
 $('savename').onclick=()=>{
   const n=cleanName($('kidname').value);
   if(n!==save.name)save.mots[WORD_LEVELS.length]=0;
-  save.name=n;store();buildMenu();$('parentbox').hidden=true;
+  save.name=n;store();closeParents();
+};
+function askReset(kind){
+  resetKind=kind;
+  $('resetmsg').textContent=kind==='all'
+    ?'Tout effacer ? Les étoiles, les niveaux ouverts et le prénom seront perdus.'
+    :'Effacer les étoiles ? Seul le premier niveau de chaque série restera ouvert. Le prénom est gardé.';
+  $('resetchoice').hidden=true;$('resetconfirm').hidden=false;
+}
+$('resetstars').onclick=()=>askReset('stars');
+$('resetall').onclick=()=>askReset('all');
+$('resetno').onclick=refreshParents;
+$('resetyes').onclick=()=>{
+  const name=save.name;
+  save=freshSave();if(resetKind==='stars')save.name=name;
+  if(resetKind==='all'){try{localStorage.removeItem(KEY);}catch(e){}}else store();
+  refreshParents();buildMenu();
+  $('resetmsg').textContent='';closeParents();
 };
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
 show('menu');
